@@ -1,5 +1,6 @@
 import streamlit as st
 from db import conectar
+from utils import buscar_estoque_disponivel
 from datetime import datetime
 import uuid
 import pandas as pd
@@ -7,14 +8,17 @@ import pandas as pd
 
 def limpar_form():
     for key in list(st.session_state.keys()):
-        if key.startswith("qtd_") or key.startswith("val_"):
+        if (
+            key.startswith("qtd_")
+            or key.startswith("val_")
+            or key.startswith("brinquedos_select")
+            or key.startswith("cliente_select")
+        ):
             del st.session_state[key]
 
     campos = [
         "data_reserva",
         "hora_reserva",
-        "brinquedos_select",
-        "cliente_select",
         "zap_novo",
         "nome_novo",
         "frete",
@@ -47,20 +51,20 @@ def tela_nova_reserva():
         cursor.execute("SELECT id, nome_completo, whatsapp FROM clientes ORDER BY nome_completo")
         clientes = cursor.fetchall()
 
-        mapa_clientes = {
+        mapa = {
             f"{c['nome_completo']} ({c['whatsapp']})": c['id']
             for c in clientes
         }
 
         selecionado = st.selectbox(
             "Selecione o cliente",
-            list(mapa_clientes.keys()),
+            list(mapa.keys()),
             index=None,
             key="cliente_select"
         )
 
         if selecionado:
-            id_cliente = mapa_clientes[selecionado]
+            id_cliente = mapa[selecionado]
 
     else:
         col1, col2 = st.columns(2)
@@ -78,85 +82,60 @@ def tela_nova_reserva():
                 id_cliente = existe['id']
                 st.info("Cliente já cadastrado encontrado!")
 
-cursor.execute("""
-    SELECT 
-        b.id,
-        b.nome,
-        b.quantidade_disponivel,
-        b.preco_base,
-        COALESCE(SUM(a.quantidade), 0) as reservado
-    FROM brinquedos b
-    LEFT JOIN alugueis a 
-        ON b.id = a.brinquedo_id
-        AND DATE(a.data_inicio) = %s
-    GROUP BY b.id
-    ORDER BY b.nome
-""", (data,))
+    estoque = buscar_estoque_disponivel(data)
 
-estoque = cursor.fetchall()
+    bris_dict = {}
+    label_to_id = {}
 
-mapa = {}
-for b in estoque:
-    disponivel = b["quantidade_disponivel"] - b["reservado"]
+    for row in estoque:
+        restante = int(row["quantidade_disponivel"]) - int(row.get("ocupados", 0))
 
-    mapa[b["id"]] = {
-        "nome": b["nome"],
-        "disponivel": max(disponivel, 0),
-        "preco": float(b["preco_base"])
-    }
+        label = f"{row['nome']} (disp: {restante})"
 
-opcoes = list(mapa.keys())
+        bris_dict[row["id"]] = {
+            "label": label,
+            "restante": restante,
+            "preco": float(row["preco_base"]),
+            "nome": row["nome"]
+        }
 
+        label_to_id[label] = row["id"]
 
-if "brinquedos_select" not in st.session_state:
-    st.session_state["brinquedos_select"] = []
+    opcoes = [v["label"] for v in bris_dict.values() if v["restante"] > 0]
 
+    selecionados = st.multiselect(
+        "Brinquedos",
+        opcoes,
+        key="brinquedos_select"
+    )
 
-def atualizar_selecao():
-    st.session_state["brinquedos_select"] = [
-        x for x in st.session_state["brinquedos_select"] if x in mapa
-    ]
+    detalhes = []
+    total = 0.0
 
-st.multiselect(
-    "Brinquedos",
-    options=opcoes,
-    default=st.session_state["brinquedos_select"],
-    format_func=lambda x: f"{mapa[x]['nome']} (disp: {mapa[x]['disponivel']})",
-    key="brinquedos_select",
-    on_change=atualizar_selecao
-)
+    for label in selecionados:
+        b_id = label_to_id[label]
+        b = bris_dict[b_id]
 
-selecionados = st.session_state["brinquedos_select"]
+        with st.expander(b["nome"], expanded=False):
+            col1, col2 = st.columns(2)
 
-detalhes = []
-total = 0.0
+            qtd = col1.number_input(
+                "Quantidade",
+                min_value=1,
+                max_value=b["restante"],
+                value=1,
+                key=f"qtd_{b_id}"
+            )
 
-for b_id in selecionados:
-    if b_id not in mapa:
-        continue
+            valor = col2.number_input(
+                "Valor (R$)",
+                min_value=0.0,
+                value=b["preco"],
+                key=f"val_{b_id}"
+            )
 
-    b = mapa[b_id]
-
-    with st.expander(b["nome"], expanded=False):
-        col1, col2 = st.columns(2)
-
-        qtd = col1.number_input(
-            "Quantidade",
-            min_value=1,
-            max_value=max(1, int(b["disponivel"])),
-            value=1,
-            key=f"qtd_{b_id}"
-        )
-
-        valor = col2.number_input(
-            "Valor (R$)",
-            min_value=0.0,
-            value=b["preco"],
-            key=f"val_{b_id}"
-        )
-
-    total += qtd * valor
-    detalhes.append((b_id, qtd, valor))
+        total += qtd * valor
+        detalhes.append((b_id, qtd, valor))
 
     st.divider()
 
@@ -280,6 +259,73 @@ def tela_gerenciar_reservas():
             return
 
         st.dataframe(df.drop(columns=["grupo_id"]), use_container_width=True, hide_index=True)
+
+        st.divider()
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Editar")
+
+            id_edit = st.number_input("ID para editar", min_value=0, step=1)
+
+            if id_edit > 0:
+                cursor.execute("SELECT * FROM alugueis WHERE id=%s", (id_edit,))
+                res = cursor.fetchone()
+
+                if res:
+                    with st.form(f"form_edit_{id_edit}"):
+                        data = st.date_input("Data", res['data_inicio'])
+                        hora = st.time_input("Hora", res['data_inicio'].time())
+                        valor = st.number_input("Valor", value=float(res['valor_final']))
+                        pago = st.number_input("Pago", value=float(res['valor_pago']))
+                        obs = st.text_area("Obs", value=res['observacoes'])
+
+                        if st.form_submit_button("Salvar"):
+                            nova_data = datetime.combine(data, hora)
+
+                            cursor.execute("""
+                                UPDATE alugueis
+                                SET data_inicio=%s,
+                                    valor_final=%s,
+                                    valor_pago=%s,
+                                    observacoes=%s
+                                WHERE id=%s
+                            """, (nova_data, valor, pago, obs, id_edit))
+
+                            conn.commit()
+                            st.success("Atualizado!")
+                            st.rerun()
+
+        with col2:
+            st.subheader("Excluir")
+
+            id_del = st.number_input("ID para excluir", min_value=0, step=1, key="del_id")
+
+            if "confirmando_exclusao" not in st.session_state:
+                st.session_state.confirmando_exclusao = False
+
+            if id_del > 0 and not st.session_state.confirmando_exclusao:
+                if st.button("Excluir", type="primary"):
+                    st.session_state.confirmando_exclusao = True
+                    st.rerun()
+
+            if st.session_state.confirmando_exclusao:
+                st.warning(f"Tem certeza que deseja excluir o ID {id_del}?")
+
+                col_c1, col_c2 = st.columns(2)
+
+                if col_c1.button("Sim, excluir"):
+                    cursor.execute("DELETE FROM alugueis WHERE id=%s", (id_del,))
+                    conn.commit()
+
+                    st.success("Registro excluído!")
+                    st.session_state.confirmando_exclusao = False
+                    st.rerun()
+
+                if col_c2.button("Cancelar"):
+                    st.session_state.confirmando_exclusao = False
+                    st.rerun()
 
     finally:
         conn.close()
