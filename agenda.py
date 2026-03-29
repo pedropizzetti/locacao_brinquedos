@@ -34,7 +34,8 @@ def tela_agenda():
     if df.empty:
         st.info("Sem reservas")
         return
-
+        
+    df = df.sort_values(["Inicio", "grupo_id"])
     grupos = df.groupby("grupo_id")
 
     for g_id, grupo in grupos:
