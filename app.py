@@ -4,6 +4,23 @@ import pandas as pd
 from datetime import datetime, time
 import uuid
 
+@st.cache_data(ttl=60)
+def buscar_estoque_disponivel(data_festa):
+    conn = conectar()
+    cursor = conn.cursor(dictionary=True)
+    inicio_est = datetime.combine(data_festa, time.min)
+    fim_est = datetime.combine(data_festa, time.max)
+    cursor.execute("""
+        SELECT b.id, b.nome, b.quantidade_disponivel, b.preco_base,
+               COALESCE((SELECT SUM(a.quantidade) FROM alugueis a 
+                         WHERE a.brinquedo_id = b.id 
+                         AND a.data_inicio >= %s AND a.data_inicio <= %s), 0) as ocupados
+        FROM brinquedos b
+    """, (inicio_est, fim_est))
+    res = cursor.fetchall()
+    conn.close()
+    return res
+    
 def conectar():
     return mysql.connector.connect(
         host=st.secrets["mysql"]["host"],
@@ -21,8 +38,6 @@ def formatar_zap(num):
     return num
 
 st.set_page_config(page_title="Mais Brinquedos", layout="wide")
-if 'usuario_nome' not in st.session_state:
-    st.session_state['usuario_nome'] = "" 
     
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
@@ -150,134 +165,123 @@ if menu == "Agenda":
 
 elif menu == "Nova Reserva":
     st.header("Nova Reserva")
-    with st.spinner("Carregando estoque e clientes..."):
-        conn = conectar()
-        try:
-            cursor = conn.cursor(dictionary=True)
+    
+    if 'sel_labels' not in st.session_state:
+        st.session_state.sel_labels = []
 
-            c_data, c_hora = st.columns(2)
-            d_festa = c_data.date_input("Data da Festa:", datetime.now())
-            h_festa = c_hora.time_input("Horário:", value=time(8, 0))
+    c_data, c_hora = st.columns(2)
+    d_festa = c_data.date_input("Data da Festa:", datetime.now())
+    h_festa = c_hora.time_input("Horário:", value=time(8, 0))
 
-            inicio_est = datetime.combine(d_festa, time.min)
-            fim_est = datetime.combine(d_festa, time.max)
-            cursor.execute("""
-                            SELECT b.id,
-                                   b.nome,
-                                   b.quantidade_disponivel,
-                                   b.preco_base,
-                                   COALESCE((SELECT SUM(a.quantidade)
-                                             FROM alugueis a
-                                             WHERE a.brinquedo_id = b.id
-                                               AND a.data_inicio >= %s
-                                               AND a.data_inicio <= %s), 0) as ocupados
-                            FROM brinquedos b
-                            """, (inicio_est, fim_est))
-            estoque_data = cursor.fetchall()
+    # USA A FUNÇÃO COM CACHE QUE VOCÊ CRIOU NO TOPO
+    with st.spinner("Carregando estoque..."):
+        estoque_data = buscar_estoque_disponivel(d_festa)
 
-            bris_dict = {row['id']: {
-                "label": f"{row['nome']} - (Disp: {row['quantidade_disponivel'] - int(row['ocupados'])})",
-                "restante": row['quantidade_disponivel'] - int(row['ocupados']),
-                "nome": row['nome'].strip(),
-                "preco": float(row['preco_base'])
-            } for row in estoque_data}
+    # Organiza os dados do estoque
+    bris_dict = {row['id']: {
+        "label": f"{row['nome']} - (Disp: {row['quantidade_disponivel'] - int(row['ocupados'])})",
+        "restante": row['quantidade_disponivel'] - int(row['ocupados']),
+        "nome": row['nome'].strip(),
+        "preco": float(row['preco_base'])
+    } for row in estoque_data}
 
-            label_to_id = {v["label"]: k for k, v in bris_dict.items()}
+    label_to_id = {v["label"]: k for k, v in bris_dict.items()}
 
-            tipo = st.radio("O cliente já está cadastrado?", ["Sim", "Não"], horizontal=True)
-            id_cli_final = None
-            n_nome = ""
-            z_limpo = ""
+    tipo = st.radio("O cliente já está cadastrado?", ["Sim", "Não"], horizontal=True)
+    id_cli_final = None
+    n_nome = ""
+    z_limpo = ""
 
-            if tipo == "Sim":
-                cursor.execute("SELECT id, nome_completo, whatsapp FROM clientes ORDER BY nome_completo")
-                clis = {f"{r['nome_completo']} ({formatar_zap(r['whatsapp'])})": r['id'] for r in cursor.fetchall()}
-                cli_sel = st.selectbox("Selecione o Cliente:", options=list(clis.keys()), index=None)
-                if cli_sel: id_cli_final = clis[cli_sel]
+    conn = conectar()
+    cursor = conn.cursor(dictionary=True)
+
+    if tipo == "Sim":
+        cursor.execute("SELECT id, nome_completo, whatsapp FROM clientes ORDER BY nome_completo")
+        clis = {f"{r['nome_completo']} ({formatar_zap(r['whatsapp'])})": r['id'] for r in cursor.fetchall()}
+        cli_sel = st.selectbox("Selecione o Cliente:", options=list(clis.keys()), index=None)
+        if cli_sel: id_cli_final = clis[cli_sel]
+    else:
+        col_z1, col_z2 = st.columns([1, 2])
+        n_zap = col_z1.text_input("WhatsApp (DDD + Número):").strip()
+        n_nome = col_z2.text_input("Nome do Cliente:").strip().upper()
+        z_limpo = "".join(filter(str.isdigit, n_zap))
+        if len(z_limpo) >= 10:
+            cursor.execute("SELECT id FROM clientes WHERE whatsapp = %s", (z_limpo,))
+            ex = cursor.fetchone()
+            if ex:
+                id_cli_final = ex['id']
+                st.info("Cliente já cadastrado encontrado!")
+
+    st.write("---")
+    
+    # MULTISELECT COM KEY PARA NÃO PERDER A SELEÇÃO
+    opcoes_disp = [v["label"] for v in bris_dict.values() if v["restante"] > 0]
+    sel_labels = st.multiselect("Selecione os Brinquedos:", options=opcoes_disp, key="ms_brinquedos")
+
+    detalhes_reserva = []
+    soma_brinquedos = 0.0
+
+    if sel_labels:
+        st.subheader("Ajuste de Itens")
+        for lb in sel_labels:
+            b_id = label_to_id[lb]
+            b_info = bris_dict[b_id]
+
+            with st.expander(f"{b_info['nome']}", expanded=True):
+                col_q, col_v = st.columns(2)
+                qtd = col_q.number_input(f"Qtd:", min_value=1, max_value=b_info["restante"], value=1, key=f"q_{b_id}")
+                v_uni = col_v.number_input(f"Valor Unit. R$:", min_value=0.0, value=b_info["preco"], key=f"v_{b_id}")
+
+                soma_brinquedos += (v_uni * qtd)
+                detalhes_reserva.append({'id': b_id, 'qtd': qtd, 'valor': v_uni, 'nome': b_info['nome']})
+
+        st.write("---")
+        v_frete = st.number_input("Deslocamento (R$):", min_value=0.0, value=0.0, step=5.0)
+        v_desc = st.number_input("Desconto (R$):", min_value=0.0, value=0.0, step=5.0)
+        
+        total_final = soma_brinquedos + v_frete - v_desc
+        st.divider()
+        st.metric("TOTAL A PAGAR", f"R$ {total_final:.2f}")
+
+        obs = st.text_area("Endereço da Entrega:").strip().upper()
+
+        if st.button("Finalizar e Gravar Reserva", use_container_width=True, type="primary"):
+            if not detalhes_reserva:
+                st.error("Selecione pelo menos um brinquedo!")
+            elif not id_cli_final and not n_nome:
+                st.error("Informe o cliente!")
             else:
-                col_z1, col_z2 = st.columns([1, 2])
-                n_zap = col_z1.text_input("WhatsApp (DDD + Número):").strip()
-                n_nome = col_z2.text_input("Nome do Cliente:").strip().upper()
-                z_limpo = "".join(filter(str.isdigit, n_zap))
-                if len(z_limpo) >= 10:
-                    cursor.execute("SELECT id FROM clientes WHERE whatsapp = %s", (z_limpo,))
-                    ex = cursor.fetchone()
-                    if ex:
-                        id_cli_final = ex['id']
-                        st.info("Cliente já cadastrado encontrado!")
+                try:
+                    if tipo == "Não" and not id_cli_final:
+                        cursor.execute("INSERT INTO clientes (nome_completo, whatsapp) VALUES (%s, %s)", (n_nome, z_limpo))
+                        id_cli_final = cursor.lastrowid
 
-            st.write("---")
-            opcoes_disp = [v["label"] for v in bris_dict.values() if v["restante"] > 0]
-            sel_labels = st.multiselect("Selecione os Brinquedos:", options=opcoes_disp)
+                    id_g = uuid.uuid4().hex
+                    dt_f = datetime.combine(d_festa, h_festa)
 
-            detalhes_reserva = []
-            soma_brinquedos = 0.0
+                    for item in detalhes_reserva:
+                        cursor.execute("""
+                            INSERT INTO alugueis (brinquedo_id, cliente_id, data_inicio, valor_final,
+                                               valor_pago, observacoes, grupo_id, quantidade)
+                            VALUES (%s, %s, %s, %s, 0, %s, %s, %s)
+                        """, (item['id'], id_cli_final, dt_f, (item['valor'] * item['qtd']), obs, id_g, item['qtd']))
 
-            if sel_labels:
-                st.subheader("Ajuste de Itens")
-                for lb in sel_labels:
-                    b_id = label_to_id[lb]
-                    b_info = bris_dict[b_id]
+                    if v_frete > 0:
+                        cursor.execute("INSERT INTO alugueis (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade) VALUES (NULL, %s, %s, %s, 0, 'FRETE', %s, 1)", (id_cli_final, dt_f, v_frete, id_g))
+                    
+                    if v_desc > 0:
+                        cursor.execute("INSERT INTO alugueis (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade) VALUES (NULL, %s, %s, %s, 0, 'DESCONTO', %s, 1)", (id_cli_final, dt_f, -v_desc, id_g))
 
-                    with st.expander(f"{b_info['nome']}", expanded=False):
-                        col_q, col_v = st.columns(2)
-                        qtd = col_q.number_input(f"Qtd:", min_value=1, max_value=b_info["restante"], value=1,
-                                                 key=f"q_{b_id}")
-                        v_uni = col_v.number_input(f"Valor Unit. R$:", min_value=0.0, value=b_info["preco"],
-                                                   key=f"v_{b_id}")
-
-                    soma_brinquedos += (v_uni * qtd)
-                    detalhes_reserva.append({'id': b_id, 'qtd': qtd, 'valor': v_uni, 'nome': b_info['nome']})
-
-                st.write("---")
-                v_frete = st.number_input("Deslocamento (R$):", min_value=0.0, value=0.0, step=5.0)
-                v_desc = st.number_input("Desconto (R$):", min_value=0.0, value=0.0, step=5.0)
-                v_sin = st.number_input("Adiantamento Pago (R$):", min_value=0.0, value=0.0)
-
-                total_final = soma_brinquedos + v_frete - v_desc
-                st.divider()
-                st.metric("TOTAL A PAGAR", f"R$ {total_final:.2f}")
-
-                obs = st.text_area("Endereço da Entrega:").strip().upper()
-
-                if st.button("Finalizar e Gravar Reserva", use_container_width=True, type="primary"):
-                    with st.spinner("Gravando no banco..."):
-                        if not detalhes_reserva:
-                            st.error("Selecione pelo menos um brinquedo!")
-                        else:
-                            if tipo == "Não" and not id_cli_final:
-                                cursor.execute("INSERT INTO clientes (nome_completo, whatsapp) VALUES (%s, %s)",
-                                               (n_nome, z_limpo))
-                                id_cli_final = cursor.lastrowid
-
-                            id_g = uuid.uuid4().hex
-                            dt_f = datetime.combine(d_festa, h_festa)
-
-                            for item in detalhes_reserva:
-                                cursor.execute("""
-                                               INSERT INTO alugueis (brinquedo_id, cliente_id, data_inicio, valor_final,
-                                                                     valor_pago, observacoes, grupo_id, quantidade)
-                                               VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                                               """,
-                                               (item['id'], id_cli_final, dt_f, (item['valor'] * item['qtd']), 0, obs, id_g,
-                                                item['qtd']))
-
-                            if v_frete > 0:
-                                cursor.execute(
-                                    "INSERT INTO alugueis (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade) VALUES (NULL, %s, %s, %s, 0, 'FRETE', %s, 1)",
-                                    (id_cli_final, dt_f, v_frete, id_g))
-                            if v_desc > 0:
-                                cursor.execute(
-                                    "INSERT INTO alugueis (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade) VALUES (NULL, %s, %s, %s, 0, 'DESCONTO', %s, 1)",
-                                    (id_cli_final, dt_f, -v_desc, id_g))
-
-                            cursor.execute("UPDATE clientes SET endereco_entrega = %s WHERE id = %s", (obs, id_cli_final))
-
-                            conn.commit()
-                            st.success(f"Reserva gravada com sucesso!")
-                            st.rerun()
-        finally:
-            conn.close()
+                    conn.commit()
+                    st.cache_data.clear() 
+                    st.success("Reserva gravada com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao gravar: {e}")
+                finally:
+                    conn.close()
+    else:
+        conn.close()
 
 elif menu == "Gerenciar Reservas":
     st.header("Gerenciar Locações")
@@ -344,7 +348,7 @@ elif menu == "Gerenciar Reservas":
                             st.error("ID não encontrado.")
 
                 with col_del:
-                    st.subheader("🗑️ Cancelar/Remover")
+                    st.subheader("Cancelar/Remover")
                     id_del = st.number_input("ID para excluir:", min_value=0, step=1, key="input_del")
                     confirmar = st.checkbox(f"Confirmar exclusão definitiva do ID {id_del}")
                     if st.button("Excluir Agora", type="primary", disabled=not confirmar):
