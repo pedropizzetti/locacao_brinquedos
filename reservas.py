@@ -5,11 +5,8 @@ from datetime import datetime
 import uuid
 import pandas as pd
 
-def tela_nova_reserva():
-    import pandas as pd
-    from datetime import datetime
-    import uuid
 
+def tela_nova_reserva():
     st.header("Nova Reserva")
 
     data = st.date_input("Data")
@@ -57,7 +54,6 @@ def tela_nova_reserva():
                 st.info("Cliente já cadastrado encontrado!")
 
     estoque = buscar_estoque_disponivel(data)
-
     bris_dict = {b['nome']: b for b in estoque}
 
     selecionados = st.multiselect("Brinquedos", list(bris_dict.keys()))
@@ -65,25 +61,29 @@ def tela_nova_reserva():
     detalhes = []
     total = 0.0
 
-    if selecionados:
-        for nome in selecionados:
-            b = bris_dict[nome]
+    for nome in selecionados:
+        b = bris_dict[nome]
 
-            qtd = st.number_input(
-                f"{nome} - Quantidade",
-                1,
-                int(b["quantidade_disponivel"]),
-                key=f"q_{nome}"
+        with st.expander(f"⚙️ {nome}", expanded=False):
+            col1, col2 = st.columns(2)
+
+            qtd = col1.number_input(
+                "Quantidade",
+                min_value=1,
+                max_value=int(b["quantidade_disponivel"]),
+                value=1,
+                key=f"qtd_{b['id']}"
             )
 
-            valor = st.number_input(
-                f"{nome} - Valor",
+            valor = col2.number_input(
+                "Valor (R$)",
+                min_value=0.0,
                 value=float(b["preco_base"]),
-                key=f"v_{nome}"
+                key=f"val_{b['id']}"
             )
 
-            total += qtd * valor
-            detalhes.append((b["id"], qtd, valor))
+        total += qtd * valor
+        detalhes.append((b["id"], qtd, valor))
 
     st.divider()
 
@@ -163,6 +163,7 @@ def tela_nova_reserva():
 
         finally:
             conn.close()
+
 
 
 def tela_gerenciar_reservas():
