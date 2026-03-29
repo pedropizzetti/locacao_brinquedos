@@ -35,16 +35,17 @@ def tela_agenda():
         st.info("Sem reservas")
         return
         
+    df["Inicio"] = pd.to_datetime(df["Inicio"])
     df = df.sort_values(["Inicio", "grupo_id"])
-    grupos = df.groupby("grupo_id")
 
-    for g_id, grupo in grupos:
+    for g_id in df["grupo_id"].unique():
+        grupo = df[df["grupo_id"] == g_id]
         total = grupo["valor_final"].sum()
         pago = grupo["valor_pago"].sum()
         restante = total - pago
 
         nome = grupo["Cliente"].iloc[0]
-        hora = pd.to_datetime(grupo["Inicio"].iloc[0]).strftime("%H:%M")
+        hora = grupo["Inicio"].iloc[0].strftime("%H:%M")
 
         icone = "✅" if restante <= 0 else "💰"
 
