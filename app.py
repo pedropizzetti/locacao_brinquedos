@@ -4,12 +4,14 @@ import pandas as pd
 from datetime import datetime, time
 import uuid
 
+@st.cache_resource 
 def conectar():
     return mysql.connector.connect(
         host=st.secrets["mysql"]["host"],
         user=st.secrets["mysql"]["user"],
         password=st.secrets["mysql"]["password"],
-        database=st.secrets["mysql"]["database"]
+        database=st.secrets["mysql"]["database"],
+        autocommit=True 
     )
 
 def formatar_zap(num):
