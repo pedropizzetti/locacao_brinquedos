@@ -35,6 +35,7 @@ if not st.session_state['logado']:
             if u_raw in st.secrets["usuarios"] and str(st.secrets["usuarios"][u_raw]) == p_raw:
                 st.session_state['logado'] = True
                 st.session_state['usuario_nome'] = u_raw
+                st.empty()
                 st.rerun()
             else:
                 st.error("Usuário ou senha incorretos.")
