@@ -4,15 +4,20 @@ import pandas as pd
 from datetime import datetime, time
 import uuid
 
-@st.cache_resource 
+@st.cache_resource(ttl=3600)
 def conectar():
-    return mysql.connector.connect(
-        host=st.secrets["mysql"]["host"],
-        user=st.secrets["mysql"]["user"],
-        password=st.secrets["mysql"]["password"],
-        database=st.secrets["mysql"]["database"],
-        autocommit=True 
-    )
+    try:
+        conn = mysql.connector.connect(
+            host=st.secrets["mysql"]["host"],
+            user=st.secrets["mysql"]["user"],
+            password=st.secrets["mysql"]["password"],
+            database=st.secrets["mysql"]["database"],
+            autocommit=True
+        )
+        return conn
+    except mysql.connector.Error:
+        st.cache_resource.clear()
+        return None
 
 def formatar_zap(num):
     num = "".join(filter(str.isdigit, str(num)))
