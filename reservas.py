@@ -11,7 +11,6 @@ def limpar_form():
         if (
             key.startswith("qtd_")
             or key.startswith("val_")
-            or key.startswith("form_")
         ):
             del st.session_state[key]
 
@@ -84,7 +83,12 @@ def tela_nova_reserva():
                 st.info("Cliente já cadastrado encontrado!")
 
     estoque = buscar_estoque_disponivel(data)
+
     bris_dict = {b['nome']: b for b in estoque}
+
+    # 🔥 mantém seleção mesmo com rerun
+    if "brinquedos_select" not in st.session_state:
+        st.session_state["brinquedos_select"] = []
 
     selecionados = st.multiselect(
         "Brinquedos",
@@ -96,6 +100,9 @@ def tela_nova_reserva():
     total = 0.0
 
     for nome in selecionados:
+        if nome not in bris_dict:
+            continue
+
         b = bris_dict[nome]
 
         with st.expander(f"{nome}", expanded=False):
