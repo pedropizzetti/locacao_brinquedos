@@ -89,7 +89,7 @@ def tela_nova_reserva():
 
     frete = st.number_input("Frete", 0.0)
     desconto = st.number_input("Desconto", 0.0)
-    sinal = st.number_input("Sinal pago", 0.0)
+    sinal = st.number_input("Adiantamento pago", 0.0)
 
     total_final = total + frete - desconto
     restante = total_final - sinal
