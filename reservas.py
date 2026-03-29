@@ -6,11 +6,38 @@ import uuid
 import pandas as pd
 
 
+def limpar_form():
+    for key in list(st.session_state.keys()):
+        if (
+            key.startswith("qtd_")
+            or key.startswith("val_")
+            or key.startswith("form_")
+        ):
+            del st.session_state[key]
+
+    campos = [
+        "data_reserva",
+        "hora_reserva",
+        "brinquedos_select",
+        "cliente_select",
+        "zap_novo",
+        "nome_novo",
+        "frete",
+        "desconto",
+        "sinal",
+        "obs"
+    ]
+
+    for c in campos:
+        if c in st.session_state:
+            del st.session_state[c]
+
+
 def tela_nova_reserva():
     st.header("Nova Reserva")
 
-    data = st.date_input("Data")
-    hora = st.time_input("Hora")
+    data = st.date_input("Data", key="data_reserva")
+    hora = st.time_input("Hora", key="hora_reserva")
 
     conn = conectar()
     cursor = conn.cursor(dictionary=True)
@@ -20,8 +47,6 @@ def tela_nova_reserva():
     tipo = st.radio("Cliente já cadastrado?", ["Sim", "Não"], horizontal=True)
 
     id_cliente = None
-    nome_novo = ""
-    zap_novo = ""
 
     if tipo == "Sim":
         cursor.execute("SELECT id, nome_completo, whatsapp FROM clientes ORDER BY nome_completo")
@@ -32,7 +57,12 @@ def tela_nova_reserva():
             for c in clientes
         }
 
-        selecionado = st.selectbox("Selecione o cliente", list(mapa.keys()), index=None)
+        selecionado = st.selectbox(
+            "Selecione o cliente",
+            list(mapa.keys()),
+            index=None,
+            key="cliente_select"
+        )
 
         if selecionado:
             id_cliente = mapa[selecionado]
@@ -40,8 +70,8 @@ def tela_nova_reserva():
     else:
         col1, col2 = st.columns(2)
 
-        zap_novo = col1.text_input("WhatsApp")
-        nome_novo = col2.text_input("Nome").upper()
+        zap_novo = col1.text_input("WhatsApp", key="zap_novo")
+        nome_novo = col2.text_input("Nome", key="nome_novo").upper()
 
         zap_limpo = "".join(filter(str.isdigit, zap_novo))
 
@@ -53,21 +83,14 @@ def tela_nova_reserva():
                 id_cliente = existe['id']
                 st.info("Cliente já cadastrado encontrado!")
 
-
     estoque = buscar_estoque_disponivel(data)
     bris_dict = {b['nome']: b for b in estoque}
-
-    if "brinquedos_sel" not in st.session_state:
-        st.session_state.brinquedos_sel = []
 
     selecionados = st.multiselect(
         "Brinquedos",
         list(bris_dict.keys()),
-        default=st.session_state.brinquedos_sel,
-        key="multiselect_brinquedos"
+        key="brinquedos_select"
     )
-
-    st.session_state.brinquedos_sel = selecionados
 
     detalhes = []
     total = 0.0
@@ -75,7 +98,7 @@ def tela_nova_reserva():
     for nome in selecionados:
         b = bris_dict[nome]
 
-        with st.expander(f"⚙️ {nome}", expanded=False):
+        with st.expander(f"{nome}", expanded=False):
             col1, col2 = st.columns(2)
 
             qtd = col1.number_input(
@@ -98,9 +121,9 @@ def tela_nova_reserva():
 
     st.divider()
 
-    frete = st.number_input("Frete", 0.0)
-    desconto = st.number_input("Desconto", 0.0)
-    sinal = st.number_input("Adiantamento pago", 0.0)
+    frete = st.number_input("Frete", 0.0, key="frete")
+    desconto = st.number_input("Desconto", 0.0, key="desconto")
+    sinal = st.number_input("Adiantamento pago", 0.0, key="sinal")
 
     total_final = total + frete - desconto
     restante = total_final - sinal
@@ -109,7 +132,7 @@ def tela_nova_reserva():
     col1.metric("Total", f"R$ {total_final:.2f}")
     col2.metric("Restante", f"R$ {restante:.2f}")
 
-    obs = st.text_area("Endereço / Observações")
+    obs = st.text_area("Endereço / Observações", key="obs")
 
     if st.button("Salvar Reserva", type="primary"):
 
@@ -117,19 +140,21 @@ def tela_nova_reserva():
             st.error("Selecione pelo menos um brinquedo")
             return
 
-        if not id_cliente and not nome_novo:
-            st.error("Informe o cliente")
-            return
+        if not id_cliente:
+            if not st.session_state.get("nome_novo"):
+                st.error("Informe o cliente")
+                return
 
         try:
             conn.autocommit = False
             cursor = conn.cursor()
 
             if not id_cliente:
-                zap_limpo = "".join(filter(str.isdigit, zap_novo))
+                zap_limpo = "".join(filter(str.isdigit, st.session_state.get("zap_novo", "")))
+
                 cursor.execute(
                     "INSERT INTO clientes (nome_completo, whatsapp) VALUES (%s,%s)",
-                    (nome_novo, zap_limpo)
+                    (st.session_state.get("nome_novo"), zap_limpo)
                 )
                 id_cliente = cursor.lastrowid
 
@@ -166,8 +191,7 @@ def tela_nova_reserva():
 
             conn.commit()
 
-            st.session_state.brinquedos_sel = []
-
+            limpar_form()
             st.success("Reserva salva com sucesso!")
             st.rerun()
 
