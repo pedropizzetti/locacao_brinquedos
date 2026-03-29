@@ -17,6 +17,7 @@ def tela_financeiro():
                 SUM(valor_final) as total,
                 SUM(valor_pago) as recebido
             FROM alugueis
+            WHERE data_inicio >= CURDATE() - INTERVAL 30 DAY
         """, conn)
 
         total = float(df['total'].iloc[0] or 0)
@@ -37,9 +38,9 @@ def tela_financeiro():
                 SUM(valor_final) as Total_dia,
                 SUM(valor_pago) as Recebido_dia
             FROM alugueis
+            WHERE data_inicio >= CURDATE() - INTERVAL 30 DAY
             GROUP BY DATE(data_inicio)
             ORDER BY Data DESC
-            LIMIT 30
         """, conn)
 
         if not df_detalhado.empty:
@@ -47,9 +48,6 @@ def tela_financeiro():
                 "Total_dia": "Total",
                 "Recebido_dia": "Recebido"
             })
-
-            df_detalhado["Total"] = df_detalhado["Total"].astype(float)
-            df_detalhado["Recebido"] = df_detalhado["Recebido"].astype(float)
 
             st.subheader("Últimos 30 dias")
 
@@ -60,7 +58,7 @@ def tela_financeiro():
                 disabled=True
             )
         else:
-            st.info("Sem dados financeiros.")
+            st.info("Sem dados financeiros nos últimos 30 dias.")
 
     finally:
         conn.close()
