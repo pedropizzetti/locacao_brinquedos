@@ -60,9 +60,10 @@ if menu == "Agenda":
     inicio_dt = datetime.combine(data_sel, time.min)
     fim_dt = datetime.combine(data_sel, time.max)
 
-    conn = conectar()
-    try:
-        query = """
+    with st.spinner("Buscando informações..."):
+        conn = conectar()
+        try:
+            query = """
                 SELECT c.nome_completo as Cliente, c.whatsapp as Fone, a.observacoes as Endereco,
                        b.nome as Brinquedo, a.quantidade, a.data_inicio as Inicio,
                        a.valor_final, a.valor_pago, a.grupo_id
@@ -71,83 +72,77 @@ if menu == "Agenda":
                 JOIN brinquedos b ON a.brinquedo_id = b.id
                 WHERE a.data_inicio >= %s AND a.data_inicio <= %s
                 """
-        df_dia = pd.read_sql(query, conn, params=(inicio_dt, fim_dt))
+            df_dia = pd.read_sql(query, conn, params=(inicio_dt, fim_dt))
 
-        if not df_dia.empty:
-            df_agrupado = df_dia.groupby(['grupo_id', 'Cliente', 'Fone', 'Endereco', 'Inicio']).apply(
-                lambda x: pd.Series({
-                    'valor_total': x['valor_final'].sum(),
-                    'valor_pago': x['valor_pago'].sum()
-                })
-            ).reset_index()
+            if not df_dia.empty:
+                df_agrupado = df_dia.groupby(['grupo_id', 'Cliente', 'Fone', 'Endereco', 'Inicio']).apply(
+                    lambda x: pd.Series({
+                        'valor_total': x['valor_final'].sum(),
+                        'valor_pago': x['valor_pago'].sum()
+                    })
+                ).reset_index()
 
-            if busca:
-                df_agrupado = df_agrupado[df_agrupado['Cliente'].str.contains(busca, case=False, na=False) |
-                                          df_agrupado['Endereco'].str.contains(busca, case=False, na=False)]
+                if busca:
+                    df_agrupado = df_agrupado[df_agrupado['Cliente'].str.contains(busca, case=False, na=False) |
+                                              df_agrupado['Endereco'].str.contains(busca, case=False, na=False)]
 
-            df_agrupado = df_agrupado.sort_values('Inicio')
+                df_agrupado = df_agrupado.sort_values('Inicio')
 
-            m1, m2, m3, m4 = st.columns(4)
-            m1.metric("Entregas", len(df_agrupado))
-            m2.metric("Total", f"R$ {df_agrupado['valor_total'].sum():.2f}")
-            m3.metric("A Receber", f"R$ {(df_agrupado['valor_total'].sum() - df_agrupado['valor_pago'].sum()):.2f}")
-            m4.metric("Itens Total", int(df_dia['quantidade'].sum()))
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Entregas", len(df_agrupado))
+                m2.metric("Total", f"R$ {df_agrupado['valor_total'].sum():.2f}")
+                m3.metric("A Receber", f"R$ {(df_agrupado['valor_total'].sum() - df_agrupado['valor_pago'].sum()):.2f}")
+                m4.metric("Itens Total", int(df_dia['quantidade'].sum()))
 
-            st.divider()
+                st.divider()
 
-            for _, r in df_agrupado.iterrows():
-                restante = round(r['valor_total'] - r['valor_pago'], 2)
-                hora_str = pd.to_datetime(r['Inicio']).strftime('%H:%M')
-                icone = "✅" if restante <= 0 else "💰"
-                status_txt = "QUITADO" if restante <= 0 else f"PENDENTE: R$ {restante:.2f}"
-
-                with st.expander(f"{icone} {hora_str} - {r['Cliente']} | {status_txt}"):
-                    st.markdown("### Itens da Locação")
-                    itens_do_grupo = df_dia[df_dia['grupo_id'] == r['grupo_id']]
-                    col_h1, col_h2, col_h3 = st.columns([3, 1, 2])
-                    col_h1.caption("Brinquedo")
-                    col_h2.caption("Qtd")
-                    col_h3.caption("Valor Item")
-
-                    for _, item in itens_do_grupo.iterrows():
-                        c_it, c_qt, c_v = st.columns([3, 1, 2])
-                        c_it.write(f"**{item['Brinquedo']}**")
-                        c_qt.write(f"{int(item['quantidade'])}")
-                        c_v.write(f"R$ {item['valor_final']:.2f}")
-
-                    st.divider()
-                    c_t1, c_t2 = st.columns([4, 2])
-                    c_t1.markdown("### TOTAL DA FESTA:")
-                    c_t2.markdown(f"### R$ {r['valor_total']:.2f}")
-
+                for _, r in df_agrupado.iterrows():
                     restante = round(r['valor_total'] - r['valor_pago'], 2)
-                    if restante > 0:
-                        st.warning(f"**FALTA RECEBER: R$ {restante:.2f}**")
+                    hora_str = pd.to_datetime(r['Inicio']).strftime('%H:%M')
+                    icone = "✅" if restante <= 0 else "💰"
+                    status_txt = "QUITADO" if restante <= 0 else f"PENDENTE: R$ {restante:.2f}"
 
-                    col_end, col_contato = st.columns([2, 1])
-                    with col_end:
-                        st.markdown(f"**ENTREGA:**\n{r['Endereco']}")
-                    with col_contato:
-                        num = "".join(filter(str.isdigit, str(r['Fone'])))
-                        if num:
-                            st.markdown(f"**CONTATO:**\n{formatar_zap(num)}")
-                            st.link_button("Chamar no WhatsApp", f"https://wa.me/55{num}", use_container_width=True)
+                    with st.expander(f"{icone} {hora_str} - {r['Cliente']} | {status_txt}"):
+                        st.markdown("### Itens da Locação")
+                        itens_do_grupo = df_dia[df_dia['grupo_id'] == r['grupo_id']]
+                        col_h1, col_h2, col_h3 = st.columns([3, 1, 2])
+                        col_h1.caption("Brinquedo")
+                        col_h2.caption("Qtd")
+                        col_h3.caption("Valor Item")
 
-                    if restante > 0:
-                        if st.button(f"Confirmar Recebimento de R$ {restante:.2f}", key=f"pay_{r['grupo_id']}", use_container_width=True):
-                            cursor = conn.cursor()
-                            cursor.execute("""
-                                           UPDATE alugueis
-                                           SET valor_pago       = valor_final,
-                                               status_pagamento = 'pago'
-                                           WHERE grupo_id = %s
-                                           """, (r['grupo_id'],))
-                            conn.commit()
-                            st.rerun()
-        else:
-            st.info("Sem reservas para esta data.")
-    finally:
-        conn.close()
+                        for _, item in itens_do_grupo.iterrows():
+                            c_it, c_qt, c_v = st.columns([3, 1, 2])
+                            c_it.write(f"**{item['Brinquedo']}**")
+                            c_qt.write(f"{int(item['quantidade'])}")
+                            c_v.write(f"R$ {item['valor_final']:.2f}")
+
+                        st.divider()
+                        c_t1, c_t2 = st.columns([4, 2])
+                        c_t1.markdown("### TOTAL DA FESTA:")
+                        c_t2.markdown(f"### R$ {r['valor_total']:.2f}")
+
+                        if restante > 0:
+                            st.warning(f"**FALTA RECEBER: R$ {restante:.2f}**")
+
+                        col_end, col_contato = st.columns([2, 1])
+                        with col_end:
+                            st.markdown(f"**ENTREGA:**\n{r['Endereco']}")
+                        with col_contato:
+                            num = "".join(filter(str.isdigit, str(r['Fone'])))
+                            if num:
+                                st.markdown(f"**CONTATO:**\n{formatar_zap(num)}")
+                                st.link_button("Chamar no WhatsApp", f"https://wa.me/55{num}", use_container_width=True)
+
+                        if restante > 0:
+                            if st.button(f"Confirmar Recebimento de R$ {restante:.2f}", key=f"pay_{r['grupo_id']}", use_container_width=True):
+                                cursor = conn.cursor()
+                                cursor.execute("UPDATE alugueis SET valor_pago = valor_final, status_pagamento = 'pago' WHERE grupo_id = %s", (r['grupo_id'],))
+                                conn.commit()
+                                st.rerun()
+            else:
+                st.info("Sem reservas para esta data.")
+        finally:
+            conn.close()
 
 elif menu == "Nova Reserva":
     st.header("Nova Reserva")
