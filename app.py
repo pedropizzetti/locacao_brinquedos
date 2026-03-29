@@ -7,9 +7,11 @@ from financeiro import tela_financeiro
 
 st.set_page_config(page_title="Mais Brinquedos", layout="wide")
 
-login()
+if not login():
+    st.stop()
 
 st.sidebar.title(f"Olá, {st.session_state['usuario_nome'].capitalize()}!")
+
 menu = st.sidebar.selectbox("Navegação:", [
     "Agenda",
     "Nova Reserva",
