@@ -24,21 +24,24 @@ st.set_page_config(page_title="Mais Brinquedos", layout="wide")
 
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
+    
+placeholder = st.empty()
 
 if not st.session_state['logado']:
-    st.markdown("<h1 style='text-align: center;'>Sistema Mais Brinquedos</h1>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        u_raw = st.text_input("Usuário:").strip().lower()
-        p_raw = st.text_input("Senha:", type="password")
-        if st.button("Entrar", use_container_width=True):
-            if u_raw in st.secrets["usuarios"] and str(st.secrets["usuarios"][u_raw]) == p_raw:
-                st.session_state['logado'] = True
-                st.session_state['usuario_nome'] = u_raw
-                st.empty()
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos.")
+    with placeholder.container():
+        st.markdown("<h1 style='text-align: center;'>Sistema Mais Brinquedos</h1>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            u_raw = st.text_input("Usuário:").strip().lower()
+            p_raw = st.text_input("Senha:", type="password")
+            if st.button("Entrar", use_container_width=True):
+                if u_raw in st.secrets["usuarios"] and str(st.secrets["usuarios"][u_raw]) == p_raw:
+                    st.session_state['logado'] = True
+                    st.session_state['usuario_nome'] = u_raw
+                    placeholder.empty() 
+                    st.rerun()
+                else:
+                    st.error("Usuário ou senha incorretos.")
     st.stop()
 
 st.sidebar.title(f"Olá, {st.session_state['usuario_nome'].capitalize()}!")
