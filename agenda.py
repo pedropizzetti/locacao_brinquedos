@@ -43,16 +43,65 @@ def tela_agenda():
         restante = total - pago
 
         nome = grupo["Cliente"].iloc[0]
-        hora = grupo["Inicio"].iloc[0]
+        hora = pd.to_datetime(grupo["Inicio"].iloc[0]).strftime("%H:%M")
 
-        with st.expander(f"{nome} - R$ {total:.2f}"):
+        icone = "✅" if restante <= 0 else "💰"
+
+        with st.expander(f"{icone} {hora} - {nome} | R$ {total:.2f}"):
+
+            st.markdown("### Itens da festa")
+
+            col1, col2, col3 = st.columns([4, 1, 2])
+            col1.caption("Item")
+            col2.caption("Qtd")
+            col3.caption("Valor")
+
             for _, item in grupo.iterrows():
-                st.write(f"{item['Brinquedo']} x{item['quantidade']}")
+                nome_item = item["Brinquedo"]
+                qtd = int(item["quantidade"])
+                valor = float(item["valor_final"])
 
-            st.write(f"Restante: R$ {restante:.2f}")
+                c1, c2, c3 = st.columns([4, 1, 2])
+
+                if nome_item == "DESCONTO":
+                    c1.markdown("**Desconto**")
+                    c2.write("-")
+                    c3.markdown(f"-R$ {abs(valor):.2f}")
+
+                elif nome_item == "FRETE":
+                    c1.markdown("**Frete**")
+                    c2.write("-")
+                    c3.write(f"R$ {valor:.2f}")
+
+                else:
+                    c1.write(nome_item)
+                    c2.write(qtd)
+                    c3.write(f"R$ {valor:.2f}")
+
+            st.divider()
+
+            c1, c2 = st.columns(2)
+            c1.markdown(f"### Total: R$ {total:.2f}")
+            c2.markdown(f"### Restante: R$ {restante:.2f}")
+
+            col_end, col_contato = st.columns(2)
+
+            with col_end:
+                st.markdown(f"**Endereço:**\n{grupo['Endereco'].iloc[0]}")
+
+            with col_contato:
+                fone = grupo["Fone"].iloc[0]
+                if fone:
+                    numero = "".join(filter(str.isdigit, str(fone)))
+                    st.markdown(f"**Contato:**\n{formatar_zap(numero)}")
+                    st.link_button(
+                        "Chamar no WhatsApp",
+                        f"https://wa.me/55{numero}",
+                        use_container_width=True
+                    )
 
             if restante > 0:
-                if st.button("Quitar", key=g_id):
+                if st.button(f"Quitar R$ {restante:.2f}", key=g_id):
                     cursor = conn.cursor()
                     cursor.execute("""
                         UPDATE alugueis 
