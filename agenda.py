@@ -19,7 +19,7 @@ def tela_agenda():
         SELECT c.nome_completo as Cliente,
                c.whatsapp as Fone,
                a.observacoes as Endereco,
-               b.nome as Brinquedo,
+               COALESCE(b.nome, a.observacoes) as Brinquedo,
                a.quantidade,
                a.data_inicio as Inicio,
                a.valor_final,
@@ -27,7 +27,7 @@ def tela_agenda():
                a.grupo_id
         FROM alugueis a
         JOIN clientes c ON a.cliente_id = c.id
-        JOIN brinquedos b ON a.brinquedo_id = b.id
+        LEFT JOIN brinquedos b ON a.brinquedo_id = b.id
         WHERE a.data_inicio BETWEEN %s AND %s
     """, conn, params=(inicio, fim))
 
