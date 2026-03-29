@@ -53,10 +53,21 @@ def tela_nova_reserva():
                 id_cliente = existe['id']
                 st.info("Cliente já cadastrado encontrado!")
 
+
     estoque = buscar_estoque_disponivel(data)
     bris_dict = {b['nome']: b for b in estoque}
 
-    selecionados = st.multiselect("Brinquedos", list(bris_dict.keys()))
+    if "brinquedos_sel" not in st.session_state:
+        st.session_state.brinquedos_sel = []
+
+    selecionados = st.multiselect(
+        "Brinquedos",
+        list(bris_dict.keys()),
+        default=st.session_state.brinquedos_sel,
+        key="multiselect_brinquedos"
+    )
+
+    st.session_state.brinquedos_sel = selecionados
 
     detalhes = []
     total = 0.0
@@ -154,6 +165,9 @@ def tela_nova_reserva():
                 """, (id_cliente, data_hora, -desconto, grupo_id))
 
             conn.commit()
+
+            st.session_state.brinquedos_sel = []
+
             st.success("Reserva salva com sucesso!")
             st.rerun()
 
@@ -163,7 +177,6 @@ def tela_nova_reserva():
 
         finally:
             conn.close()
-
 
 
 def tela_gerenciar_reservas():
