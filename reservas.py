@@ -6,10 +6,55 @@ import uuid
 import pandas as pd
 
 def tela_nova_reserva():
+    import pandas as pd
+    from datetime import datetime
+    import uuid
+
     st.header("Nova Reserva")
 
     data = st.date_input("Data")
     hora = st.time_input("Hora")
+
+    conn = conectar()
+    cursor = conn.cursor(dictionary=True)
+
+    st.subheader("Cliente")
+
+    tipo = st.radio("Cliente já cadastrado?", ["Sim", "Não"], horizontal=True)
+
+    id_cliente = None
+    nome_novo = ""
+    zap_novo = ""
+
+    if tipo == "Sim":
+        cursor.execute("SELECT id, nome_completo, whatsapp FROM clientes ORDER BY nome_completo")
+        clientes = cursor.fetchall()
+
+        mapa = {
+            f"{c['nome_completo']} ({c['whatsapp']})": c['id']
+            for c in clientes
+        }
+
+        selecionado = st.selectbox("Selecione o cliente", list(mapa.keys()), index=None)
+
+        if selecionado:
+            id_cliente = mapa[selecionado]
+
+    else:
+        col1, col2 = st.columns(2)
+
+        zap_novo = col1.text_input("WhatsApp")
+        nome_novo = col2.text_input("Nome").upper()
+
+        zap_limpo = "".join(filter(str.isdigit, zap_novo))
+
+        if len(zap_limpo) >= 10:
+            cursor.execute("SELECT id FROM clientes WHERE whatsapp=%s", (zap_limpo,))
+            existe = cursor.fetchone()
+
+            if existe:
+                id_cliente = existe['id']
+                st.info("Cliente já cadastrado encontrado!")
 
     estoque = buscar_estoque_disponivel(data)
 
@@ -26,16 +71,15 @@ def tela_nova_reserva():
 
             qtd = st.number_input(
                 f"{nome} - Quantidade",
-                min_value=1,
-                max_value=int(b["quantidade_disponivel"]),
-                key=f"qtd_{nome}"
+                1,
+                int(b["quantidade_disponivel"]),
+                key=f"q_{nome}"
             )
 
             valor = st.number_input(
                 f"{nome} - Valor",
-                min_value=0.0,
                 value=float(b["preco_base"]),
-                key=f"val_{nome}"
+                key=f"v_{nome}"
             )
 
             total += qtd * valor
@@ -43,9 +87,9 @@ def tela_nova_reserva():
 
     st.divider()
 
-    frete = st.number_input("Frete", min_value=0.0)
-    desconto = st.number_input("Desconto", min_value=0.0)
-    sinal = st.number_input("Sinal pago", min_value=0.0)
+    frete = st.number_input("Frete", 0.0)
+    desconto = st.number_input("Desconto", 0.0)
+    sinal = st.number_input("Sinal pago", 0.0)
 
     total_final = total + frete - desconto
     restante = total_final - sinal
@@ -57,15 +101,26 @@ def tela_nova_reserva():
     obs = st.text_area("Endereço / Observações")
 
     if st.button("Salvar Reserva", type="primary"):
+
         if not detalhes:
             st.error("Selecione pelo menos um brinquedo")
             return
 
-        conn = conectar()
+        if not id_cliente and not nome_novo:
+            st.error("Informe o cliente")
+            return
 
         try:
             conn.autocommit = False
             cursor = conn.cursor()
+
+            if not id_cliente:
+                zap_limpo = "".join(filter(str.isdigit, zap_novo))
+                cursor.execute(
+                    "INSERT INTO clientes (nome_completo, whatsapp) VALUES (%s,%s)",
+                    (nome_novo, zap_limpo)
+                )
+                id_cliente = cursor.lastrowid
 
             grupo_id = uuid.uuid4().hex
             data_hora = datetime.combine(data, hora)
@@ -80,23 +135,23 @@ def tela_nova_reserva():
 
                 cursor.execute("""
                     INSERT INTO alugueis 
-                    (brinquedo_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s)
-                """, (b_id, data_hora, valor_total_item, pago, obs, grupo_id, qtd))
+                    (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                """, (b_id, id_cliente, data_hora, valor_total_item, pago, obs, grupo_id, qtd))
 
             if frete > 0:
                 cursor.execute("""
                     INSERT INTO alugueis 
-                    (brinquedo_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade)
-                    VALUES (NULL,%s,%s,0,'FRETE',%s,1)
-                """, (data_hora, frete, grupo_id))
+                    (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade)
+                    VALUES (NULL,%s,%s,%s,0,'FRETE',%s,1)
+                """, (id_cliente, data_hora, frete, grupo_id))
 
             if desconto > 0:
                 cursor.execute("""
                     INSERT INTO alugueis 
-                    (brinquedo_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade)
-                    VALUES (NULL,%s,%s,0,'DESCONTO',%s,1)
-                """, (data_hora, -desconto, grupo_id))
+                    (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id, quantidade)
+                    VALUES (NULL,%s,%s,%s,0,'DESCONTO',%s,1)
+                """, (id_cliente, data_hora, -desconto, grupo_id))
 
             conn.commit()
             st.success("Reserva salva com sucesso!")
@@ -204,7 +259,7 @@ def tela_gerenciar_reservas():
 
                 col_c1, col_c2 = st.columns(2)
 
-                if col_c1.button("✅ Sim, excluir"):
+                if col_c1.button("Sim, excluir"):
                     cursor.execute("DELETE FROM alugueis WHERE id=%s", (id_del,))
                     conn.commit()
 
@@ -212,7 +267,7 @@ def tela_gerenciar_reservas():
                     st.session_state.confirmando_exclusao = False
                     st.rerun()
 
-                if col_c2.button("❌ Cancelar"):
+                if col_c2.button("Cancelar"):
                     st.session_state.confirmando_exclusao = False
                     st.rerun()
 
