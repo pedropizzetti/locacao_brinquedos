@@ -68,33 +68,40 @@ def tela_nova_reserva():
         if selecionado:
             id_cliente = mapa[selecionado]
 
-    else:
-        col1, col2 = st.columns(2)
+        else:
+            col1, col2 = st.columns(2)
 
-        zap_novo = col1.text_input("WhatsApp", key="zap_novo")
-        nome_novo = col2.text_input("Nome", key="nome_novo").upper()
+            zap_novo = col1.text_input("WhatsApp", key="zap_novo")
+            nome_novo = col2.text_input("Nome", key="nome_novo").upper()
 
-        zap_limpo = "".join(filter(str.isdigit, zap_novo))
+            zap_limpo = "".join(filter(str.isdigit, zap_novo))
 
-        if len(zap_limpo) >= 10:
-            cursor.execute(
-                "SELECT id, nome_completo FROM clientes WHERE whatsapp=%s",
-                (zap_limpo,)
-            )
-            existe = cursor.fetchone()
-
-            if existe:
-                st.warning(f"Já existe um cliente com esse número: {existe['nome_completo']}")
-
-                escolha = st.radio(
-                    "O que deseja fazer?",
-                    ["Usar cliente existente", "Criar novo mesmo assim"],
-                    key="escolha_cliente_existente"
+            if len(zap_limpo) >= 10:
+                cursor.execute(
+                    "SELECT id, nome_completo FROM clientes WHERE whatsapp=%s",
+                    (zap_limpo,)
                 )
+                existe = cursor.fetchone()
 
-                if escolha == "Usar cliente existente":
-                    id_cliente = existe['id']
-                    usar_existente = True
+                if existe:
+                    st.warning(f"Já existe: {existe['nome_completo']}")
+
+                    escolha = st.radio(
+                        "Deseja usar esse cliente?",
+                        ["Sim", "Não"],
+                        key="confirmar_cliente_existente"
+                    )
+
+                    if escolha == "Sim":
+                        escolha_final = st.radio(
+                            "O que deseja fazer?",
+                            ["Usar cliente existente", "Criar novo mesmo assim"],
+                            key="escolha_cliente_existente"
+                        )
+
+                        if escolha_final == "Usar cliente existente":
+                            id_cliente = existe['id']
+                            usar_existente = True
 
     estoque = buscar_estoque_disponivel(data)
 
