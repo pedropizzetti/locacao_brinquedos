@@ -21,24 +21,28 @@ def formatar_zap(num):
     return num
 
 st.set_page_config(page_title="Mais Brinquedos", layout="wide")
-
+if 'usuario_nome' not in st.session_state:
+    st.session_state['usuario_nome'] = "" 
+    
 if 'logado' not in st.session_state:
     st.session_state['logado'] = False
     
 placeholder = st.empty()
 
 if not st.session_state['logado']:
-    with placeholder.container():
-        st.markdown("<h1 style='text-align: center;'>Sistema Mais Brinquedos</h1>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
+    st.markdown("<h1 style='text-align: center;'>Sistema Mais Brinquedos</h1>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1, 1, 1])
+    
+    with col2: 
+        with st.form("login_form"):
             u_raw = st.text_input("Usuário:").strip().lower()
             p_raw = st.text_input("Senha:", type="password")
-            if st.button("Entrar", use_container_width=True):
+            btn_login = st.form_submit_button("Entrar", use_container_width=True)
+            
+            if btn_login:
                 if u_raw in st.secrets["usuarios"] and str(st.secrets["usuarios"][u_raw]) == p_raw:
                     st.session_state['logado'] = True
                     st.session_state['usuario_nome'] = u_raw
-                    placeholder.empty() 
                     st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
