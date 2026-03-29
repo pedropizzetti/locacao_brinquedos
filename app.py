@@ -180,7 +180,7 @@ elif menu == "Nova Reserva":
 
             label_to_id = {v["label"]: k for k, v in bris_dict.items()}
 
-            tipo = st.radio("o O cliente já está cadastrado?", ["Sim", "Não"], horizontal=True)
+            tipo = st.radio("O cliente já está cadastrado?", ["Sim", "Não"], horizontal=True)
             id_cli_final = None
             n_nome = ""
             z_limpo = ""
