@@ -78,84 +78,85 @@ def tela_nova_reserva():
                 id_cliente = existe['id']
                 st.info("Cliente já cadastrado encontrado!")
 
-    # 🔥 ESTOQUE DIRETO DO BANCO (CORRETO)
-    cursor.execute("""
-        SELECT 
-            b.id,
-            b.nome,
-            b.quantidade_disponivel,
-            b.preco_base,
-            COALESCE(SUM(a.quantidade), 0) as reservado
-        FROM brinquedos b
-        LEFT JOIN alugueis a 
-            ON b.id = a.brinquedo_id
-            AND DATE(a.data_inicio) = %s
-        WHERE b.status = 'disponivel'
-        GROUP BY b.id
-        ORDER BY b.nome
-    """, (data,))
+cursor.execute("""
+    SELECT 
+        b.id,
+        b.nome,
+        b.quantidade_disponivel,
+        b.preco_base,
+        COALESCE(SUM(a.quantidade), 0) as reservado
+    FROM brinquedos b
+    LEFT JOIN alugueis a 
+        ON b.id = a.brinquedo_id
+        AND DATE(a.data_inicio) = %s
+    GROUP BY b.id
+    ORDER BY b.nome
+""", (data,))
 
-    estoque = cursor.fetchall()
+estoque = cursor.fetchall()
 
-    opcoes = []
-    mapa = {}
+mapa = {}
+for b in estoque:
+    disponivel = b["quantidade_disponivel"] - b["reservado"]
 
-    for b in estoque:
-        disponivel = b["quantidade_disponivel"] - b["reservado"]
+    mapa[b["id"]] = {
+        "nome": b["nome"],
+        "disponivel": max(disponivel, 0),
+        "preco": float(b["preco_base"])
+    }
 
-        label = f"{b['nome']} (disp: {max(disponivel, 0)})"
+opcoes = list(mapa.keys())
 
-        opcoes.append(label)
 
-        mapa[label] = {
-            "id": b["id"],
-            "nome": b["nome"],
-            "disponivel": max(disponivel, 0),
-            "preco": float(b["preco_base"])
-        }
+if "brinquedos_select" not in st.session_state:
+    st.session_state["brinquedos_select"] = []
 
-    if "brinquedos_select" not in st.session_state:
-        st.session_state["brinquedos_select"] = []
 
-    selecionados = st.multiselect(
-        "Brinquedos",
-        opcoes,
-        key="brinquedos_select"
-    )
+def atualizar_selecao():
+    st.session_state["brinquedos_select"] = [
+        x for x in st.session_state["brinquedos_select"] if x in mapa
+    ]
 
-    detalhes = []
-    total = 0.0
+st.multiselect(
+    "Brinquedos",
+    options=opcoes,
+    default=st.session_state["brinquedos_select"],
+    format_func=lambda x: f"{mapa[x]['nome']} (disp: {mapa[x]['disponivel']})",
+    key="brinquedos_select",
+    on_change=atualizar_selecao
+)
 
-    for label in selecionados:
-        if label not in mapa:
-            continue
+selecionados = st.session_state["brinquedos_select"]
 
-        b = mapa[label]
+detalhes = []
+total = 0.0
 
-        if b["disponivel"] <= 0:
-            st.warning(f"{b['nome']} sem estoque disponível")
-            continue
+for b_id in selecionados:
+    if b_id not in mapa:
+        continue
 
-        with st.expander(b["nome"], expanded=False):
-            col1, col2 = st.columns(2)
+    b = mapa[b_id]
 
-            qtd = col1.number_input(
-                "Quantidade",
-                min_value=1,
-                max_value=int(b["disponivel"]),
-                value=1,
-                key=f"qtd_{b['id']}"
-            )
+    with st.expander(b["nome"], expanded=False):
+        col1, col2 = st.columns(2)
 
-            valor = col2.number_input(
-                "Valor (R$)",
-                min_value=0.0,
-                value=b["preco"],
-                key=f"val_{b['id']}"
-            )
+        qtd = col1.number_input(
+            "Quantidade",
+            min_value=1,
+            max_value=max(1, int(b["disponivel"])),
+            value=1,
+            key=f"qtd_{b_id}"
+        )
 
-        total += qtd * valor
-        detalhes.append((b["id"], qtd, valor))
+        valor = col2.number_input(
+            "Valor (R$)",
+            min_value=0.0,
+            value=b["preco"],
+            key=f"val_{b_id}"
+        )
+
+    total += qtd * valor
+    detalhes.append((b_id, qtd, valor))
 
     st.divider()
 
