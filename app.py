@@ -1,7 +1,7 @@
 import streamlit as st
 from auth import login
 from agenda import tela_agenda
-from reservas import tela_nova_reserva, tela_gerenciar_reservas
+from reservas import tela_nova_reserva
 from clientes import tela_clientes
 from financeiro import tela_financeiro
 
