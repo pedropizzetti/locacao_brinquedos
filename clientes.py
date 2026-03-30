@@ -11,7 +11,6 @@ def tela_clientes():
 
     try:
         cursor = conn.cursor(dictionary=True)
-
         if busca:
             cursor.execute(
                 "SELECT * FROM clientes WHERE nome_completo LIKE %s ORDER BY nome_completo",
@@ -58,7 +57,6 @@ def tela_clientes():
                             st.success("Cliente excluído!")
                             st.rerun()
 
-                # 🔹 ABA 2 - HISTÓRICO
                 with tab2:
                     df_hist = pd.read_sql("""
                         SELECT 
