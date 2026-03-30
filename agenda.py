@@ -53,7 +53,7 @@ def tela_agenda():
             st.markdown("### Itens da festa")
 
             col1, col2, col3 = st.columns([4, 1, 2])
-            col1.caption("Itens")
+            col1.caption("Item")
             col2.caption("Qtd")
             col3.caption("Valor")
 
