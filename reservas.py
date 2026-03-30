@@ -226,7 +226,6 @@ def tela_nova_reserva():
         finally:
             conn.close()
 
-
 def tela_gerenciar_reservas():
     st.header("Gerenciar Locações")
 
@@ -253,7 +252,55 @@ def tela_gerenciar_reservas():
         if busca:
             df = df[df.apply(lambda row: busca.lower() in str(row).lower(), axis=1)]
 
+        selecionado = st.selectbox(
+            "Selecione uma reserva para editar",
+            df["id"].tolist()
+        )
+
         st.dataframe(df, use_container_width=True, hide_index=True)
+
+        if selecionado:
+            cursor = conn.cursor(dictionary=True)
+
+            cursor.execute("SELECT * FROM alugueis WHERE id=%s", (selecionado,))
+            res = cursor.fetchone()
+
+            if res:
+                st.divider()
+                st.subheader(f"Editando ID {selecionado}")
+
+                with st.form("form_edit"):
+                    data = st.date_input("Data", res['data_inicio'])
+                    hora = st.time_input("Hora", res['data_inicio'].time())
+                    valor = st.number_input("Valor", value=float(res['valor_final']))
+                    pago = st.number_input("Pago", value=float(res['valor_pago']))
+                    obs = st.text_area("Observações", value=res['observacoes'])
+
+                    salvar = st.form_submit_button("Salvar alterações")
+                    excluir = st.form_submit_button("Excluir")
+
+                    if salvar:
+                        nova_data = datetime.combine(data, hora)
+
+                        cursor.execute("""
+                            UPDATE alugueis
+                            SET data_inicio=%s,
+                                valor_final=%s,
+                                valor_pago=%s,
+                                observacoes=%s
+                            WHERE id=%s
+                        """, (nova_data, valor, pago, obs, selecionado))
+
+                        conn.commit()
+                        st.success("Atualizado com sucesso!")
+                        st.rerun()
+
+                    if excluir:
+                        cursor.execute("DELETE FROM alugueis WHERE id=%s", (selecionado,))
+                        conn.commit()
+
+                        st.success("Excluído!")
+                        st.rerun()
 
     finally:
         conn.close()
