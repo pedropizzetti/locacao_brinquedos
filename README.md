@@ -30,3 +30,25 @@ Diferente de sistemas que rodam apenas no computador, este projeto utiliza tecno
 
 ---
 
+## Demonstração do Sistema
+
+### Logística e Entregas
+Roteiro detalhado para o dia da festa, com controle de itens por cliente, status de pagamento (saldo restante) e atalho direto para contato via WhatsApp.
+<div align="center">
+  <img src="img/agenda.png" width="80%">
+</div>
+
+### Fluxo de Reserva
+Interface intuitiva para cadastro de novos clientes, seleção de múltiplos itens do inventário e cálculo automático de totais, fretes e descontos.
+<div align="center">
+  <img src="img/novareserva.png" width="45%">
+  <img src="img/novareserva2.png" width="45%">
+</div>
+
+### Painel Estratégico
+Controle financeiro administrativo com métricas de faturamento bruto, valores efetivamente recebidos e histórico de locações.
+<div align="center">
+  <img src="img/financeiro.png" width="80%">
+</div>
+
+---
