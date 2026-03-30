@@ -8,7 +8,6 @@ def tela_agenda():
     st.subheader("Roteiro de Entregas")
 
     data_sel = st.date_input("Data", datetime.now())
-    busca = st.text_input("Buscar")
 
     conn = conectar()
 
