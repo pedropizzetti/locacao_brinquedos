@@ -7,7 +7,7 @@ def login():
     if st.session_state['logado']:
         return True
 
-    st.markdown("<h2 style='text-align: center;'>Sistema Mais Brinquedos</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>Mais Brinquedos</h2>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([2, 1, 2])
 
