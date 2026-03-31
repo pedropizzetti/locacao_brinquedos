@@ -96,8 +96,15 @@ def tela_agenda():
             col_end, col_contato = st.columns(2)
 
             with col_end:
-                endereco = grupo[grupo["Endereco"].str.len() > 2]["Endereco"].iloc[0]
-                st.markdown(f"**Endereço:**\n{endereco}")
+                ends = grupo["Endereco"].dropna().unique()
+                lista_limpa = [e for e in ends if str(e).upper().strip() not in ["DESCONTO", "FRETE", ""]]
+
+                if lista_limpa:
+                    endereco_final = lista_limpa[0]
+                else:
+                    endereco_final = ends[0] if len(ends) > 0 else "Não informado"
+
+                st.markdown(f"**Endereço:**\n{endereco_final}")
 
             with col_contato:
                 fone = grupo["Fone"].iloc[0]
