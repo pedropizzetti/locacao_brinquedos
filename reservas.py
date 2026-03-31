@@ -42,7 +42,6 @@ def tela_nova_reserva():
     cursor = conn.cursor(dictionary=True)
 
     st.subheader("Cliente")
-
     tipo = st.radio("Cliente já cadastrado?", ["Sim", "Não"], horizontal=True)
 
     id_cliente = None
@@ -228,9 +227,7 @@ def tela_nova_reserva():
 
 def tela_gerenciar_reservas():
     st.header("Gerenciar Locações")
-
     busca = st.text_input("Buscar")
-
     conn = conectar()
 
     try:
@@ -251,23 +248,25 @@ def tela_gerenciar_reservas():
 
         if busca:
             df = df[df.apply(lambda row: busca.lower() in str(row).lower(), axis=1)]
+        opcoes_id = ["Selecione um ID..."] + [str(id) for id in df["id"].tolist()]
 
         selecionado = st.selectbox(
             "Selecione uma reserva para editar",
-            df["id"].tolist()
+            options=opcoes_id
         )
 
         st.dataframe(df, use_container_width=True, hide_index=True)
 
-        if selecionado:
+        if selecionado != "Selecione um ID...":
             cursor = conn.cursor(dictionary=True)
+            id_atual = int(selecionado)
 
-            cursor.execute("SELECT * FROM alugueis WHERE id=%s", (selecionado,))
+            cursor.execute("SELECT * FROM alugueis WHERE id=%s", (id_atual,))
             res = cursor.fetchone()
 
             if res:
                 st.divider()
-                st.subheader(f"Editando ID {selecionado}")
+                st.subheader(f"Editando ID {id_atual}")
 
                 with st.form("form_edit"):
                     data = st.date_input("Data", res['data_inicio'])
@@ -289,7 +288,7 @@ def tela_gerenciar_reservas():
                                 valor_pago=%s,
                                 observacoes=%s
                             WHERE id=%s
-                        """, (nova_data, valor, pago, obs, selecionado))
+                        """, (nova_data, valor, pago, obs, id_atual))
 
                         conn.commit()
                         st.success("Atualizado com sucesso!")
