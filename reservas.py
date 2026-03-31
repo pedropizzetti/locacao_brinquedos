@@ -9,10 +9,10 @@ import pandas as pd
 def limpar_form():
     for key in list(st.session_state.keys()):
         if (
-            key.startswith("qtd_")
-            or key.startswith("val_")
-            or key.startswith("brinquedos_select")
-            or key.startswith("cliente_select")
+                key.startswith("qtd_")
+                or key.startswith("val_")
+                or key.startswith("brinquedos_select")
+                or key.startswith("cliente_select")
         ):
             del st.session_state[key]
 
@@ -32,6 +32,7 @@ def limpar_form():
         if c in st.session_state:
             del st.session_state[c]
 
+
 def tela_nova_reserva():
     st.header("Nova Reserva")
 
@@ -49,10 +50,10 @@ def tela_nova_reserva():
 
     if tipo == "Sim":
         cursor.execute("""
-            SELECT id, nome_completo, whatsapp 
-            FROM clientes 
-            ORDER BY nome_completo
-        """)
+                       SELECT id, nome_completo, whatsapp
+                       FROM clientes
+                       ORDER BY nome_completo
+                       """)
         clientes = cursor.fetchall()
 
         mapa = {
@@ -104,7 +105,6 @@ def tela_nova_reserva():
                     if escolha_final == "Usar cliente existente":
                         id_cliente = existe['id']
                         usar_existente = True
-
 
     estoque = buscar_estoque_disponivel(data)
 
@@ -182,6 +182,22 @@ def tela_nova_reserva():
                 st.error("Informe o cliente")
                 return
 
+        # --- NOVA TRAVA DE SEGURANÇA: CHECAGEM DE ESTOQUE REAL-TIME ---
+        # Re-checamos o estoque no clique do botão para evitar furos
+        estoque_atualizado = buscar_estoque_disponivel(data)
+        for b_id, qtd_desejada, _ in detalhes:
+            item_estoque = next((item for item in estoque_atualizado if item["id"] == b_id), None)
+
+            if item_estoque:
+                disponivel = int(item_estoque["quantidade_disponivel"]) - int(item_estoque.get("ocupados", 0))
+                if qtd_desejada > disponivel:
+                    st.error(
+                        f"⚠️ Erro de Disponibilidade: O item '{item_estoque['nome']}' só possui {disponivel} unidade(s) livre(s) para este dia.")
+                    return
+            else:
+                st.error("Erro: Um dos brinquedos selecionados não foi encontrado no estoque.")
+                return
+
         try:
             conn.autocommit = False
             cursor = conn.cursor()
@@ -237,6 +253,7 @@ def tela_nova_reserva():
 
         finally:
             conn.close()
+
 
 def tela_gerenciar_reservas():
     st.header("Gerenciar Locações")
