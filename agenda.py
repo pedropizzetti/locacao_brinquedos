@@ -96,13 +96,19 @@ def tela_agenda():
             col_end, col_contato = st.columns(2)
 
             with col_end:
-                ends = grupo["Endereco"].dropna().unique()
-                lista_limpa = [e for e in ends if str(e).upper().strip() not in ["DESCONTO", "FRETE", ""]]
+                todos_ends = grupo["Endereco"].dropna().unique()
 
-                if lista_limpa:
+                lista_limpa = [
+                    str(e).strip() for e in todos_ends
+                    if str(e).strip().upper() not in ["DESCONTO", "FRETE", ""]
+                ]
+
+                if len(lista_limpa) > 0:
                     endereco_final = lista_limpa[0]
+                elif len(todos_ends) > 0:
+                    endereco_final = todos_ends[0]
                 else:
-                    endereco_final = ends[0] if len(ends) > 0 else "Não informado"
+                    endereco_final = "Endereço não informado"
 
                 st.markdown(f"**Endereço:**\n{endereco_final}")
 
