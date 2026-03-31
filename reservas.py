@@ -197,38 +197,34 @@ def tela_nova_reserva():
             grupo_id = uuid.uuid4().hex
             data_hora = datetime.combine(data, hora)
 
+            sinal_restante = sinal
             for b_id, qtd, valor in detalhes:
                 valor_total_item = qtd * valor
+                pago = min(sinal_restante, valor_total_item)
+                sinal_restante -= pago
+
                 cursor.execute("""
                                INSERT INTO alugueis
                                (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id,
                                 quantidade)
                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                               """, (b_id, id_cliente, data_hora, valor_total_item, 0, obs, grupo_id, qtd))
+                               """, (b_id, id_cliente, data_hora, valor_total_item, pago, obs, grupo_id, qtd))
 
             if frete > 0:
                 cursor.execute("""
                                INSERT INTO alugueis
                                (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id,
                                 quantidade)
-                               VALUES (NULL, %s, %s, %s, %s, %s, %s, %s)
-                               """, (id_cliente, data_hora, frete, 0, "FRETE", grupo_id, 1))
+                               VALUES (NULL, %s, %s, %s, 0, 'FRETE', %s, 1)
+                               """, (id_cliente, data_hora, frete, grupo_id))
 
             if desconto > 0:
                 cursor.execute("""
                                INSERT INTO alugueis
                                (brinquedo_id, cliente_id, data_inicio, valor_final, valor_pago, observacoes, grupo_id,
                                 quantidade)
-                               VALUES (NULL, %s, %s, %s, %s, %s, %s, %s)
-                               """, (id_cliente, data_hora, -desconto, 0, "DESCONTO", grupo_id, 1))
-
-
-            if sinal > 0:
-                cursor.execute("""
-                               UPDATE alugueis
-                               SET valor_pago = %s
-                               WHERE grupo_id = %s LIMIT 1
-                               """, (sinal, grupo_id))
+                               VALUES (NULL, %s, %s, %s, 0, 'DESCONTO', %s, 1)
+                               """, (id_cliente, data_hora, -desconto, grupo_id))
 
             conn.commit()
             limpar_form()
@@ -237,7 +233,7 @@ def tela_nova_reserva():
 
         except Exception as e:
             conn.rollback()
-            st.error(f"Erro: {e}")
+            st.error(f"Erro ao salvar: {e}")
 
         finally:
             conn.close()
