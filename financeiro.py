@@ -6,8 +6,8 @@ def tela_financeiro():
     st.header("Painel Financeiro")
 
     if st.session_state.get('usuario_nome') != "pedro":
-        st.error("Acesso restrito.")
-        return
+            st.error("Acesso restrito.")
+            return
 
     conn = conectar()
 
@@ -18,6 +18,7 @@ def tela_financeiro():
                 SUM(valor_pago) as recebido
             FROM alugueis
             WHERE data_inicio >= CURDATE() - INTERVAL 30 DAY
+              AND data_inicio <= NOW()
         """, conn)
 
         total = float(df['total'].iloc[0] or 0)
@@ -39,6 +40,7 @@ def tela_financeiro():
                 SUM(valor_pago) as Recebido_dia
             FROM alugueis
             WHERE data_inicio >= CURDATE() - INTERVAL 30 DAY
+                AND data_inicio <= NOW()
             GROUP BY DATE(data_inicio)
             ORDER BY Data DESC
         """, conn)
